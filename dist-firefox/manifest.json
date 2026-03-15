@@ -3,11 +3,16 @@
   "name": "DevLens — AI Developer Companion",
   "version": "1.0.0",
   "description": "Highlight anything on docs, GitHub, or Stack Overflow. Get instant AI explanations, code examples, and insights — without leaving the page.",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "devlens@devlens.dev",
+      "strict_min_version": "109.0"
+    }
+  },
   "permissions": [
     "storage",
     "activeTab",
-    "contextMenus",
-    "sidePanel"
+    "contextMenus"
   ],
   "host_permissions": [
     "https://api.groq.com/*",
@@ -28,9 +33,6 @@
     }
   ],
   "options_page": "settings.html",
-  "side_panel": {
-    "default_path": "sidepanel.html"
-  },
   "action": {
     "default_icon": {
       "16": "icons/icon-16.png",

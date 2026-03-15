@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DevLens — Highlight anything. Understand instantly.</title>
+  <meta name="description" content="Browser extension that gives developers instant AI explanations of any text or code they highlight. Context-aware for MDN, GitHub, StackOverflow, and docs.">
+  <meta name="theme-color" content="#0a0a1a">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    /* =============================================
+       TOKENS
+       ============================================= */
+    :root {
+      --bg: #0a0a1a;
+      --bg-raised: #111128;
+      --bg-card: #1a1a2e;
+      --bg-card-h: #20203e;
+      --accent: #818cf8;
+      --accent-dim: #6366f1;
+      --accent-glow: rgba(129,140,248,.18);
+      --accent-glow-s: rgba(129,140,248,.35);
+      --teal: #5eead4;
+      --teal-glow: rgba(94,234,212,.12);
+      --green: #34d399;
+      --amber: #fbbf24;
+      --red: #f87171;
+      --t1: #f1f5f9;
+      --t2: #94a3b8;
+      --t3: #64748b;
+      --border: rgba(129,140,248,.10);
+      --border-h: rgba(129,140,248,.22);
+      --r: 10px;
+      --r-lg: 14px;
+      --max-w: 1100px;
+      --font-d: 'Syne', sans-serif;
+      --font-b: 'IBM Plex Sans', sans-serif;
+      --font-m: 'IBM Plex Mono', monospace;
+    }
+
+    /* =============================================
+       RESET
+       ============================================= */
+    *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+    html{scroll-behavior:smooth;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
+    body{font-family:var(--font-b);background:var(--bg);color:var(--t2);line-height:1.65;overflow-x:hidden}
+    a{color:inherit;text-decoration:none}
+    button{font-family:inherit;cursor:pointer}
+    ul{list-style:none}
+    img,svg{display:block}
+
+    /* =============================================
+       GRAIN OVERLAY
+       ============================================= */
+    body::after{
+      content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;opacity:.035;
+      background:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    }
+
+    /* =============================================
+       DOT GRID BACKGROUND
+       ============================================= */
+    body::before{
+      content:'';position:fixed;inset:0;z-index:-1;
+      background-image:radial-gradient(circle,rgba(129,140,248,.07) 1px,transparent 1px);
+      background-size:32px 32px;
+    }
+
+    /* =============================================
+       UTILITIES
+       ============================================= */
+    .wrap{max-width:var(--max-w);margin:0 auto;padding:0 28px}
+    .sec{padding:110px 0}
+    .sec-alt{background:var(--bg-raised);border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
+
+    .label{
+      display:inline-block;font-family:var(--font-m);font-size:12px;font-weight:500;
+      color:var(--accent);text-transform:uppercase;letter-spacing:.16em;
+      margin-bottom:18px;position:relative;padding-left:28px;
+    }
+    .label::before{content:'';position:absolute;left:0;top:50%;width:18px;height:1.5px;background:var(--accent);transform:translateY(-50%)}
+
+    .sec-h{font-family:var(--font-d);font-size:clamp(30px,4.5vw,46px);font-weight:800;color:var(--t1);line-height:1.15;letter-spacing:-.02em;margin-bottom:14px}
+    .sec-p{font-size:17px;color:var(--t2);max-width:540px;line-height:1.7}
+
+    /* =============================================
+       REVEAL ANIMATIONS
+       ============================================= */
+    .rv{opacity:0;transform:translateY(32px);transition:opacity .7s cubic-bezier(.16,1,.3,1),transform .7s cubic-bezier(.16,1,.3,1)}
+    .rv.vis{opacity:1;transform:none}
+    .rv-d1{transition-delay:.1s}.rv-d2{transition-delay:.2s}.rv-d3{transition-delay:.3s}
+    .rv-d4{transition-delay:.4s}.rv-d5{transition-delay:.5s}.rv-d6{transition-delay:.6s}
+
+    /* =============================================
+       NAV
+       ============================================= */
+    .nav{position:fixed;top:0;left:0;right:0;z-index:100;backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);background:rgba(10,10,26,.8);border-bottom:1px solid var(--border);transition:background .3s}
+    .nav-in{display:flex;align-items:center;justify-content:space-between;height:60px;max-width:var(--max-w);margin:0 auto;padding:0 28px}
+    .nav-logo{display:flex;align-items:center;gap:10px;font-family:var(--font-d);font-weight:700;font-size:18px;color:var(--t1)}
+    .nav-mark{width:30px;height:30px;background:linear-gradient(135deg,var(--accent),var(--accent-dim));border-radius:7px;display:grid;place-items:center}
+    .nav-mark svg{width:16px;height:16px;color:#fff}
+    .nav-links{display:flex;align-items:center;gap:28px}
+    .nav-links a{font-size:13.5px;font-weight:500;color:var(--t3);transition:color .2s}
+    .nav-links a:hover{color:var(--t1)}
+    .nav-cta{background:var(--accent)!important;color:var(--bg)!important;padding:7px 18px;border-radius:7px;font-weight:600!important;transition:background .2s,transform .15s}
+    .nav-cta:hover{background:var(--accent-dim)!important;transform:translateY(-1px)}
+    .nav-mob{display:none;background:none;border:none;color:var(--t1);padding:4px}
+
+    /* =============================================
+       HERO
+       ============================================= */
+    .hero{padding:150px 0 80px;position:relative}
+    .hero-glow{position:absolute;top:-80px;left:50%;transform:translateX(-50%);width:900px;height:600px;background:radial-gradient(ellipse at center,rgba(129,140,248,.1) 0%,rgba(94,234,212,.04) 40%,transparent 70%);pointer-events:none}
+    .hero-inner{display:grid;grid-template-columns:1fr 1fr;gap:60px;align-items:center}
+    .hero-text{position:relative;z-index:2}
+    .hero-badge{display:inline-flex;align-items:center;gap:8px;background:var(--bg-card);border:1px solid var(--border);padding:5px 14px 5px 8px;border-radius:100px;font-size:12px;font-family:var(--font-m);color:var(--t3);margin-bottom:28px}
+    .hero-dot{width:7px;height:7px;background:var(--green);border-radius:50%;animation:blink 2.5s ease-in-out infinite}
+    @keyframes blink{0%,100%{opacity:1}50%{opacity:.4}}
+
+    .hero h1{font-family:var(--font-d);font-size:clamp(38px,5.5vw,62px);font-weight:800;color:var(--t1);line-height:1.08;letter-spacing:-.03em;margin-bottom:22px}
+    .hero h1 em{font-style:normal;background:linear-gradient(135deg,var(--accent),var(--teal));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+    .hero-desc{font-size:17px;color:var(--t2);line-height:1.75;margin-bottom:36px;max-width:440px}
+    .hero-ctas{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:16px}
+
+    .btn{display:inline-flex;align-items:center;gap:9px;padding:13px 26px;border-radius:9px;font-size:14.5px;font-weight:600;transition:all .2s;border:none}
+    .btn svg{width:18px;height:18px;flex-shrink:0}
+    .btn-p{background:var(--accent);color:var(--bg)}
+    .btn-p:hover{background:var(--accent-dim);transform:translateY(-2px);box-shadow:0 8px 30px var(--accent-glow-s)}
+    .btn-s{background:var(--bg-card);color:var(--t1);border:1px solid var(--border)}
+    .btn-s:hover{background:var(--bg-card-h);border-color:var(--border-h);transform:translateY(-2px)}
+
+    .hero-note{font-size:12.5px;font-family:var(--font-m);color:var(--t3)}
+    .hero-note kbd{color:var(--accent);background:var(--accent-glow);padding:2px 7px;border-radius:4px;font-size:11px;border:1px solid var(--border)}
+
+    /* BROWSER MOCKUP */
+    .hero-demo{position:relative;z-index:2;perspective:1200px}
+    .browser{
+      background:var(--bg-card);border:1px solid var(--border-h);border-radius:var(--r-lg);overflow:hidden;
+      box-shadow:0 30px 100px rgba(0,0,0,.5),0 0 80px rgba(129,140,248,.06);
+      transform:rotateY(-4deg) rotateX(2deg);
+      transition:transform .5s cubic-bezier(.16,1,.3,1);
+    }
+    .browser:hover{transform:rotateY(0) rotateX(0)}
+    .browser-bar{display:flex;align-items:center;gap:7px;padding:11px 16px;background:var(--bg-raised);border-bottom:1px solid var(--border)}
+    .browser-dot{width:10px;height:10px;border-radius:50%}
+    .browser-dot:nth-child(1){background:var(--red);opacity:.7}
+    .browser-dot:nth-child(2){background:var(--amber);opacity:.7}
+    .browser-dot:nth-child(3){background:var(--green);opacity:.7}
+    .browser-url{flex:1;text-align:center;font-family:var(--font-m);font-size:11px;color:var(--t3);opacity:.6}
+    .browser-body{padding:24px 28px;font-family:var(--font-m);font-size:13px;line-height:1.85;position:relative;min-height:200px}
+
+    /* Code syntax */
+    .c-k{color:#c084fc}.c-f{color:#818cf8}.c-s{color:#34d399}.c-o{color:#94a3b8}.c-n{color:#fbbf24}.c-cm{color:#4a556880}
+    .c-hl{background:rgba(129,140,248,.18);border-bottom:2px solid var(--accent);padding:1px 0;border-radius:2px}
+
+    /* Tooltip */
+    .dl-tip{
+      position:absolute;right:20px;top:50px;
+      background:var(--bg-raised);border:1px solid var(--border-h);border-radius:var(--r);
+      padding:14px 18px;width:280px;
+      box-shadow:0 16px 50px rgba(0,0,0,.6),0 0 30px rgba(129,140,248,.08);
+      animation:tip-in .6s cubic-bezier(.16,1,.3,1) both;animation-delay:.3s;
+    }
+    @keyframes tip-in{from{opacity:0;transform:translateY(10px) scale(.96)}to{opacity:1;transform:none}}
+    .dl-tip-h{display:flex;align-items:center;gap:7px;margin-bottom:9px}
+    .dl-tip-ico{width:18px;height:18px;background:linear-gradient(135deg,var(--accent),var(--accent-dim));border-radius:4px;display:grid;place-items:center}
+    .dl-tip-ico svg{width:10px;height:10px;color:#fff}
+    .dl-tip-lbl{font-family:var(--font-d);font-size:11px;font-weight:700;color:var(--accent);letter-spacing:.02em}
+    .dl-tip-txt{font-family:var(--font-b);font-size:12.5px;color:var(--t2);line-height:1.6}
+    .dl-tip-txt code{font-family:var(--font-m);background:var(--accent-glow);padding:1px 5px;border-radius:3px;font-size:11.5px;color:var(--accent)}
+    .dl-tip-bar{display:flex;gap:6px;margin-top:10px}
+    .dl-tip-tag{font-family:var(--font-m);font-size:10px;color:var(--t3);background:var(--bg-card);padding:3px 8px;border-radius:4px;border:1px solid var(--border)}
+
+    /* Scanline */
+    .browser-body::after{
+      content:'';position:absolute;inset:0;pointer-events:none;
+      background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(129,140,248,.015) 2px,rgba(129,140,248,.015) 4px);
+    }
+
+    /* =============================================
+       HOW IT WORKS
+       ============================================= */
+    .steps{display:grid;grid-template-columns:repeat(3,1fr);gap:32px;margin-top:56px;position:relative}
+    .steps::before{content:'';position:absolute;top:44px;left:calc(100%/6);right:calc(100%/6);height:1px;background:linear-gradient(90deg,transparent,var(--accent) 30%,var(--accent) 70%,transparent);opacity:.2}
+    .step{text-align:center;position:relative}
+    .step-n{
+      width:68px;height:68px;margin:0 auto 22px;
+      background:var(--bg-card);border:1.5px solid var(--border);border-radius:14px;
+      display:grid;place-items:center;transition:all .35s cubic-bezier(.16,1,.3,1);position:relative;z-index:2;
+    }
+    .step:hover .step-n{border-color:var(--accent);box-shadow:0 0 40px var(--accent-glow);transform:translateY(-4px)}
+    .step-n svg{width:26px;height:26px;color:var(--accent)}
+    .step h3{font-family:var(--font-d);font-size:17px;font-weight:700;color:var(--t1);margin-bottom:8px}
+    .step p{font-size:14.5px;color:var(--t2);line-height:1.65;max-width:260px;margin:0 auto}
+
+    /* =============================================
+       FEATURES
+       ============================================= */
+    .feat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:56px}
+    .feat{
+      background:var(--bg-card);border:1px solid var(--border);border-radius:var(--r-lg);
+      padding:30px 26px;transition:all .35s cubic-bezier(.16,1,.3,1);position:relative;overflow:hidden;
+    }
+    .feat::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--accent),transparent);opacity:0;transition:opacity .3s}
+    .feat:hover{border-color:var(--border-h);background:var(--bg-card-h);transform:translateY(-5px);box-shadow:0 16px 50px rgba(0,0,0,.3)}
+    .feat:hover::before{opacity:1}
+    .feat-ico{width:44px;height:44px;background:var(--accent-glow);border-radius:10px;display:grid;place-items:center;margin-bottom:18px}
+    .feat-ico svg{width:20px;height:20px;color:var(--accent)}
+    .feat h3{font-family:var(--font-d);font-size:16px;font-weight:700;color:var(--t1);margin-bottom:8px}
+    .feat p{font-size:13.5px;color:var(--t2);line-height:1.65}
+    .feat-tag{display:inline-block;margin-top:12px;font-family:var(--font-m);font-size:10.5px;font-weight:500;color:var(--accent);background:var(--accent-glow);padding:3px 9px;border-radius:5px;border:1px solid var(--border)}
+
+    /* =============================================
+       PRICING
+       ============================================= */
+    .price-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:22px;margin-top:56px;max-width:780px;margin-left:auto;margin-right:auto}
+    .price-card{
+      background:var(--bg-card);border:1px solid var(--border);border-radius:var(--r-lg);
+      padding:38px 32px;position:relative;transition:all .3s;
+    }
+    .price-card.pro{border-color:var(--accent);box-shadow:0 0 80px rgba(129,140,248,.08),0 30px 80px rgba(0,0,0,.3)}
+    .price-card.pro::before{
+      content:'BEST VALUE';position:absolute;top:-11px;left:50%;transform:translateX(-50%);
+      background:var(--accent);color:var(--bg);font-family:var(--font-m);font-size:10px;font-weight:600;
+      padding:4px 14px;border-radius:5px;letter-spacing:.08em;
+    }
+    .price-tier{font-family:var(--font-m);font-size:12px;font-weight:500;color:var(--accent);text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px}
+    .price-amt{font-family:var(--font-d);font-size:48px;font-weight:800;color:var(--t1);line-height:1.1;margin-bottom:4px}
+    .price-sub{font-size:13px;color:var(--t3);margin-bottom:26px}
+    .price-list{margin-bottom:28px}
+    .price-list li{display:flex;align-items:flex-start;gap:10px;padding:9px 0;font-size:13.5px;color:var(--t2);border-bottom:1px solid rgba(255,255,255,.03)}
+    .price-list li:last-child{border-bottom:none}
+    .price-list li svg{width:16px;height:16px;flex-shrink:0;margin-top:2px}
+    .price-list li svg.ck{color:var(--green)}.price-list li svg.no{color:var(--t3);opacity:.5}
+    .price-list li.off{color:var(--t3);opacity:.5}
+    .btn-block{display:block;width:100%;text-align:center;padding:13px 24px}
+
+    /* =============================================
+       PRIVACY
+       ============================================= */
+    .priv-card{
+      background:var(--bg-card);border:1px solid var(--border);border-radius:var(--r-lg);
+      padding:52px 44px;max-width:740px;margin:48px auto 0;text-align:center;position:relative;overflow:hidden;
+    }
+    .priv-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--teal),var(--accent),transparent)}
+    .priv-ico{width:58px;height:58px;background:var(--teal-glow);border:1px solid rgba(94,234,212,.15);border-radius:14px;display:grid;place-items:center;margin:0 auto 22px}
+    .priv-ico svg{width:26px;height:26px;color:var(--teal)}
+    .priv-card h3{font-family:var(--font-d);font-size:22px;font-weight:700;color:var(--t1);margin-bottom:14px}
+    .priv-card>p{font-size:15px;color:var(--t2);line-height:1.7;max-width:500px;margin:0 auto}
+    .priv-pts{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-top:32px}
+    .priv-pt{display:flex;flex-direction:column;align-items:center;gap:7px}
+    .priv-pt svg{width:18px;height:18px;color:var(--teal)}
+    .priv-pt span{font-size:12.5px;font-weight:500;color:var(--t2)}
+
+    /* =============================================
+       FAQ
+       ============================================= */
+    .faq-list{max-width:680px;margin:56px auto 0}
+    .faq-item{border-bottom:1px solid var(--border)}
+    .faq-q{
+      width:100%;background:none;border:none;text-align:left;padding:22px 0;
+      font-family:var(--font-d);font-size:15.5px;font-weight:600;color:var(--t1);
+      display:flex;align-items:center;justify-content:space-between;gap:16px;transition:color .2s;
+    }
+    .faq-q:hover{color:var(--accent)}
+    .faq-q svg{width:18px;height:18px;color:var(--t3);transition:transform .3s,color .2s;flex-shrink:0}
+    .faq-item.open .faq-q svg{transform:rotate(45deg);color:var(--accent)}
+    .faq-a{max-height:0;overflow:hidden;transition:max-height .35s ease-out}
+    .faq-item.open .faq-a{max-height:280px}
+    .faq-a p{padding-bottom:22px;font-size:14.5px;color:var(--t2);line-height:1.7}
+
+    /* =============================================
+       BOTTOM CTA
+       ============================================= */
+    .cta-end{text-align:center;padding:110px 0;position:relative}
+    .cta-end-glow{position:absolute;bottom:-100px;left:50%;transform:translateX(-50%);width:700px;height:500px;background:radial-gradient(ellipse,rgba(129,140,248,.08) 0%,rgba(94,234,212,.03) 40%,transparent 70%);pointer-events:none}
+    .cta-end h2{font-family:var(--font-d);font-size:clamp(28px,4vw,42px);font-weight:800;color:var(--t1);line-height:1.15;margin-bottom:14px;letter-spacing:-.02em}
+    .cta-end p{font-size:16px;color:var(--t2);margin-bottom:32px;max-width:440px;margin-left:auto;margin-right:auto;line-height:1.65}
+    .cta-end .hero-ctas{justify-content:center}
+
+    /* =============================================
+       FOOTER
+       ============================================= */
+    .foot{border-top:1px solid var(--border);padding:36px 0;background:var(--bg-raised)}
+    .foot-in{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px}
+    .foot-l{display:flex;align-items:center;gap:10px}
+    .foot-mark{width:22px;height:22px;background:linear-gradient(135deg,var(--accent),var(--accent-dim));border-radius:5px;display:grid;place-items:center}
+    .foot-mark svg{width:12px;height:12px;color:#fff}
+    .foot-txt{font-size:12.5px;color:var(--t3)}
+    .foot-links{display:flex;align-items:center;gap:22px}
+    .foot-links a{font-size:12.5px;font-weight:500;color:var(--t3);transition:color .2s}
+    .foot-links a:hover{color:var(--t1)}
+
+    /* =============================================
+       RESPONSIVE
+       ============================================= */
+    @media(max-width:960px){
+      .hero-inner{grid-template-columns:1fr;gap:48px;text-align:center}
+      .hero-desc{margin-left:auto;margin-right:auto}
+      .hero-ctas{justify-content:center}
+      .hero-note{text-align:center}
+      .browser{transform:none}
+      .browser:hover{transform:none}
+      .steps{grid-template-columns:1fr;gap:40px;max-width:340px;margin-left:auto;margin-right:auto}
+      .steps::before{display:none}
+      .feat-grid{grid-template-columns:repeat(2,1fr)}
+      .price-grid{grid-template-columns:1fr;max-width:400px}
+      .dl-tip{position:relative;right:auto;top:auto;margin-top:14px;width:100%;animation-delay:0s}
+    }
+    @media(max-width:640px){
+      .sec{padding:80px 0}
+      .nav-links{display:none}
+      .nav-mob{display:block}
+      .nav-links.mob-open{display:flex;flex-direction:column;position:absolute;top:60px;left:0;right:0;background:rgba(10,10,26,.97);backdrop-filter:blur(20px);padding:20px 28px;border-bottom:1px solid var(--border);gap:16px}
+      .hero{padding-top:120px;padding-bottom:60px}
+      .hero-ctas{flex-direction:column}
+      .btn{width:100%;justify-content:center}
+      .feat-grid{grid-template-columns:1fr}
+      .price-card{padding:30px 22px}
+      .priv-card{padding:36px 22px}
+      .priv-pts{grid-template-columns:1fr;gap:12px}
+      .foot-in{flex-direction:column;text-align:center}
+      .foot-links{flex-wrap:wrap;justify-content:center}
+    }
+  </style>
+</head>
+<body>
+
+  <!-- NAV -->
+  <nav class="nav">
+    <div class="nav-in">
+      <a href="#" class="nav-logo">
+        <div class="nav-mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M2 12c2.5-4.5 6-7 10-7s7.5 2.5 10 7c-2.5 4.5-6 7-10 7s-7.5-2.5-10-7z"/></svg></div>
+        DevLens
+      </a>
+      <ul class="nav-links" id="navLinks">
+        <li><a href="#features">Features</a></li>
+        <li><a href="#pricing">Pricing</a></li>
+        <li><a href="#privacy">Privacy</a></li>
+        <li><a href="#faq">FAQ</a></li>
+        <li><a href="#firefox" class="nav-cta">Install Free</a></li>
+      </ul>
+      <button class="nav-mob" onclick="document.getElementById('navLinks').classList.toggle('mob-open')" aria-label="Toggle menu">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
+    </div>
+  </nav>
+
+  <!-- HERO -->
+  <section class="hero">
+    <div class="hero-glow"></div>
+    <div class="wrap">
+      <div class="hero-inner">
+        <div class="hero-text">
+          <div class="hero-badge rv rv-d1"><span class="hero-dot"></span>Browser extension for developers</div>
+          <h1 class="rv rv-d2">Highlight anything.<br><em>Understand instantly.</em></h1>
+          <p class="hero-desc rv rv-d3">Select text or code on MDN, GitHub, StackOverflow, or any docs page. Get instant AI explanations without leaving the page.</p>
+          <div class="hero-ctas rv rv-d4">
+            <a href="#firefox" class="btn btn-s">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M21.6 8.2c-.5-1.1-1.2-2.1-2-2.9-.1 0-.1 0 0 0l-.7.7c-.1.1-.1.2 0 .3.8.8 1.4 1.7 1.8 2.7.5 1.1.7 2.3.7 3.5 0 2.1-.8 4.1-2.3 5.6s-3.5 2.3-5.6 2.3-4.1-.8-5.6-2.3S5.6 14.6 5.6 12.5c0-2.1.8-4.1 2.3-5.6S11.4 4.6 13.5 4.6c1.2 0 2.3.3 3.4.7l.7-.7c-1.2-.6-2.6-1-4.1-1C8.8 3.6 4.6 7.8 4.6 12.5S8.8 21.4 13.5 21.4s8.9-4.2 8.9-8.9c0-1.5-.3-3-1-4.3z"/></svg>
+              Get for Firefox
+            </a>
+            <a href="#chrome" class="btn btn-p">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/><line x1="21.17" y1="8" x2="12" y2="8"/><line x1="3.95" y1="6.06" x2="8.54" y2="14"/><line x1="10.88" y1="21.94" x2="15.46" y2="14"/></svg>
+              Get for Chrome
+            </a>
+          </div>
+          <p class="hero-note rv rv-d5">Free to use. Bring your own API key. <kbd>Ctrl+Shift+L</kbd> to explain.</p>
+        </div>
+
+        <div class="hero-demo rv rv-d3">
+          <div class="browser">
+            <div class="browser-bar">
+              <span class="browser-dot"></span><span class="browser-dot"></span><span class="browser-dot"></span>
+              <span class="browser-url">developer.mozilla.org/.../IntersectionObserver</span>
+            </div>
+            <div class="browser-body">
+              <div><span class="c-k">const</span> <span class="c-f">observer</span> <span class="c-o">=</span> <span class="c-k">new</span> <span class="c-f"><span class="c-hl">IntersectionObserver</span></span><span class="c-o">((</span><span class="c-f">entries</span><span class="c-o">)</span> <span class="c-o">=&gt;</span> <span class="c-o">{</span></div>
+              <div>&nbsp;&nbsp;<span class="c-f">entries</span><span class="c-o">.</span><span class="c-f">forEach</span><span class="c-o">((</span><span class="c-f">entry</span><span class="c-o">)</span> <span class="c-o">=&gt;</span> <span class="c-o">{</span></div>
+              <div>&nbsp;&nbsp;&nbsp;&nbsp;<span class="c-k">if</span> <span class="c-o">(</span><span class="c-f">entry</span><span class="c-o">.</span><span class="c-f">isIntersecting</span><span class="c-o">)</span> <span class="c-o">{</span></div>
+              <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="c-f">entry</span><span class="c-o">.</span><span class="c-f">target</span><span class="c-o">.</span><span class="c-f">classList</span><span class="c-o">.</span><span class="c-f">add</span><span class="c-o">(</span><span class="c-s">'visible'</span><span class="c-o">);</span></div>
+              <div>&nbsp;&nbsp;&nbsp;&nbsp;<span class="c-o">}</span></div>
+              <div>&nbsp;&nbsp;<span class="c-o">});</span></div>
+              <div><span class="c-o">});</span></div>
+              <div class="dl-tip">
+                <div class="dl-tip-h">
+                  <div class="dl-tip-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M2 12c2.5-4.5 6-7 10-7s7.5 2.5 10 7c-2.5 4.5-6 7-10 7s-7.5-2.5-10-7z"/></svg></div>
+                  <span class="dl-tip-lbl">DevLens</span>
+                </div>
+                <div class="dl-tip-txt">
+                  <code>IntersectionObserver</code> detects when an element enters or leaves the viewport. Used for lazy loading, infinite scroll, and scroll-triggered animations.
+                </div>
+                <div class="dl-tip-bar">
+                  <span class="dl-tip-tag">MDN Docs</span>
+                  <span class="dl-tip-tag">Web API</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- HOW IT WORKS -->
+  <section class="sec sec-alt" id="how-it-works">
+    <div class="wrap" style="text-align:center">
+      <span class="label rv">How it works</span>
+      <h2 class="sec-h rv rv-d1">Three steps. Zero friction.</h2>
+      <p class="sec-p rv rv-d2" style="margin:0 auto">No setup wizards. No onboarding flows. Just highlight and learn.</p>
+      <div class="steps">
+        <div class="step rv rv-d1">
+          <div class="step-n"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3l14 9-7 2-4 7z"/><path d="M12 14l4 7"/></svg></div>
+          <h3>Highlight text</h3>
+          <p>Select anything on any webpage -- a function, an error, a concept you want to understand.</p>
+        </div>
+        <div class="step rv rv-d2">
+          <div class="step-n"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg></div>
+          <h3>AI explains instantly</h3>
+          <p>Context-aware explanation appears inline. No tab-switching, no copy-pasting into ChatGPT.</p>
+        </div>
+        <div class="step rv rv-d3">
+          <div class="step-n"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg></div>
+          <h3>Stay in flow</h3>
+          <p>Understand unfamiliar APIs, debug errors, explore codebases -- all without breaking concentration.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FEATURES -->
+  <section class="sec" id="features">
+    <div class="wrap">
+      <span class="label rv">Features</span>
+      <h2 class="sec-h rv rv-d1">Built for how developers actually work</h2>
+      <p class="sec-p rv rv-d2">Not another generic AI chatbot. DevLens understands developer context.</p>
+      <div class="feat-grid">
+        <div class="feat rv rv-d1">
+          <div class="feat-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9h6M9 13h4"/></svg></div>
+          <h3>Inline Explanations</h3>
+          <p>Highlight any text on any webpage. Get an instant explanation in a clean popup right where you are.</p>
+          <span class="feat-tag">Ctrl+Shift+L</span>
+        </div>
+        <div class="feat rv rv-d2">
+          <div class="feat-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></div>
+          <h3>Code Block Actions</h3>
+          <p>Explain, Improve, and Copy buttons appear on every code block. One click to understand or refactor any snippet.</p>
+          <span class="feat-tag">Pro</span>
+        </div>
+        <div class="feat rv rv-d3">
+          <div class="feat-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg></div>
+          <h3>Context-Aware</h3>
+          <p>Detects MDN, GitHub, StackOverflow, cloud docs, and API references. Adjusts explanations to match.</p>
+          <span class="feat-tag">Smart Detection</span>
+        </div>
+        <div class="feat rv rv-d4">
+          <div class="feat-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z"/></svg></div>
+          <h3>Multi-Provider BYOK</h3>
+          <p>Bring your own key for Groq, Gemini, OpenRouter, OpenAI, Anthropic, or any custom endpoint.</p>
+          <span class="feat-tag">6 Providers</span>
+        </div>
+        <div class="feat rv rv-d5">
+          <div class="feat-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg></div>
+          <h3>Privacy-First</h3>
+          <p>API keys stored only in your browser. No telemetry, no analytics, no data collection. Zero server infrastructure.</p>
+          <span class="feat-tag">No Backend</span>
+        </div>
+        <div class="feat rv rv-d6">
+          <div class="feat-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="15" y1="3" x2="15" y2="21"/></svg></div>
+          <h3>Side Panel Mode</h3>
+          <p>Persistent side panel for building up context as you browse through documentation and code.</p>
+          <span class="feat-tag">Pro</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- PRICING -->
+  <section class="sec sec-alt" id="pricing">
+    <div class="wrap" style="text-align:center">
+      <span class="label rv">Pricing</span>
+      <h2 class="sec-h rv rv-d1">Simple, honest pricing</h2>
+      <p class="sec-p rv rv-d2" style="margin:0 auto">No subscriptions. No recurring charges. Pay once, own it forever.</p>
+      <div class="price-grid">
+        <div class="price-card rv rv-d2">
+          <div class="price-tier">Free</div>
+          <div class="price-amt">$0</div>
+          <div class="price-sub">Free forever</div>
+          <ul class="price-list">
+            <li><svg class="ck" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Inline text explanations</li>
+            <li><svg class="ck" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Context-aware detection</li>
+            <li><svg class="ck" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Groq and Gemini support</li>
+            <li><svg class="ck" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Keyboard shortcut</li>
+            <li class="off"><svg class="no" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>Code block actions</li>
+            <li class="off"><svg class="no" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>Side panel mode</li>
+            <li class="off"><svg class="no" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>OpenAI / Anthropic / OpenRouter</li>
+          </ul>
+          <a href="#firefox" class="btn btn-s btn-block">Install Free</a>
+        </div>
+        <div class="price-card pro rv rv-d3">
+          <div class="price-tier">Pro</div>
+          <div class="price-amt">$29</div>
+          <div class="price-sub">One-time -- yours forever</div>
+          <ul class="price-list">
+            <li><svg class="ck" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Everything in Free</li>
+            <li><svg class="ck" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Code block Explain, Improve, Copy</li>
+            <li><svg class="ck" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Persistent side panel</li>
+            <li><svg class="ck" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>All 6 AI providers</li>
+            <li><svg class="ck" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Custom API endpoints</li>
+            <li><svg class="ck" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Unlimited explanations</li>
+            <li><svg class="ck" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>All future updates</li>
+          </ul>
+          <a href="#gumroad" class="btn btn-p btn-block">Get Pro -- $29</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- PRIVACY -->
+  <section class="sec" id="privacy" style="text-align:center">
+    <div class="wrap">
+      <span class="label rv">Privacy</span>
+      <h2 class="sec-h rv rv-d1">Your keys never leave your browser</h2>
+      <p class="sec-p rv rv-d2" style="margin:0 auto">Zero backend infrastructure. No servers, no databases, no accounts. Your data stays yours.</p>
+      <div class="priv-card rv rv-d3">
+        <div class="priv-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
+        <h3>Privacy as architecture</h3>
+        <p>API keys are stored in your browser's local storage and sent directly to the AI provider you choose. DevLens never sees, stores, or proxies your keys. There is no account system, no telemetry. The extension works entirely client-side.</p>
+        <div class="priv-pts">
+          <div class="priv-pt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg><span>No data collection</span></div>
+          <div class="priv-pt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg><span>No server infrastructure</span></div>
+          <div class="priv-pt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg><span>No account required</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FAQ -->
+  <section class="sec sec-alt" id="faq">
+    <div class="wrap" style="text-align:center">
+      <span class="label rv">FAQ</span>
+      <h2 class="sec-h rv rv-d1">Common questions</h2>
+      <div class="faq-list" style="text-align:left">
+        <div class="faq-item open">
+          <button class="faq-q" onclick="this.parentElement.classList.toggle('open')">Do I need an API key?<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+          <div class="faq-a"><p>Yes -- DevLens uses a BYOK (Bring Your Own Key) model. Groq and Google Gemini both offer free API keys, so you can get started at zero cost.</p></div>
+        </div>
+        <div class="faq-item">
+          <button class="faq-q" onclick="this.parentElement.classList.toggle('open')">Which AI providers are supported?<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+          <div class="faq-a"><p>Free tier supports Groq and Gemini. Pro unlocks OpenAI (GPT-4o), Anthropic (Claude), OpenRouter (hundreds of models), and custom endpoints. You always use your own key.</p></div>
+        </div>
+        <div class="faq-item">
+          <button class="faq-q" onclick="this.parentElement.classList.toggle('open')">Is my data safe?<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+          <div class="faq-a"><p>Your API keys are stored exclusively in your browser's local storage. They are never sent to any server except the AI provider you choose. DevLens has no backend, no analytics, and no telemetry.</p></div>
+        </div>
+        <div class="faq-item">
+          <button class="faq-q" onclick="this.parentElement.classList.toggle('open')">What is Free vs Pro?<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+          <div class="faq-a"><p>Free gives you inline text explanations with Groq and Gemini. Pro ($29 one-time) adds code block actions, side panel, all 6 providers, custom endpoints, and all future updates.</p></div>
+        </div>
+        <div class="faq-item">
+          <button class="faq-q" onclick="this.parentElement.classList.toggle('open')">Does it work on any website?<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+          <div class="faq-a"><p>Yes. It works on every webpage. It has special context awareness for MDN, GitHub, StackOverflow, and docs -- but the highlight-to-explain feature works universally.</p></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- BOTTOM CTA -->
+  <section class="cta-end">
+    <div class="cta-end-glow"></div>
+    <div class="wrap">
+      <h2 class="rv">Stop context-switching.<br>Start understanding.</h2>
+      <p class="rv rv-d1">Join developers who read documentation at 10x speed.</p>
+      <div class="hero-ctas rv rv-d2">
+        <a href="#firefox" class="btn btn-s">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M21.6 8.2c-.5-1.1-1.2-2.1-2-2.9-.1 0-.1 0 0 0l-.7.7c-.1.1-.1.2 0 .3.8.8 1.4 1.7 1.8 2.7.5 1.1.7 2.3.7 3.5 0 2.1-.8 4.1-2.3 5.6s-3.5 2.3-5.6 2.3-4.1-.8-5.6-2.3S5.6 14.6 5.6 12.5c0-2.1.8-4.1 2.3-5.6S11.4 4.6 13.5 4.6c1.2 0 2.3.3 3.4.7l.7-.7c-1.2-.6-2.6-1-4.1-1C8.8 3.6 4.6 7.8 4.6 12.5S8.8 21.4 13.5 21.4s8.9-4.2 8.9-8.9c0-1.5-.3-3-1-4.3z"/></svg>
+          Get for Firefox
+        </a>
+        <a href="#chrome" class="btn btn-p">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/><line x1="21.17" y1="8" x2="12" y2="8"/><line x1="3.95" y1="6.06" x2="8.54" y2="14"/><line x1="10.88" y1="21.94" x2="15.46" y2="14"/></svg>
+          Get for Chrome
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer class="foot">
+    <div class="wrap">
+      <div class="foot-in">
+        <div class="foot-l">
+          <div class="foot-mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M2 12c2.5-4.5 6-7 10-7s7.5 2.5 10 7c-2.5 4.5-6 7-10 7s-7.5-2.5-10-7z"/></svg></div>
+          <span class="foot-txt">DevLens -- AI Developer Companion</span>
+        </div>
+        <ul class="foot-links">
+          <li><a href="https://github.com/buttergolemcode" target="_blank" rel="noopener">GitHub</a></li>
+          <li><a href="#privacy">Privacy</a></li>
+          <li><a href="#faq">FAQ</a></li>
+          <li><a href="#gumroad">Get Pro</a></li>
+        </ul>
+      </div>
+    </div>
+  </footer>
+
+  <!-- SCROLL REVEAL -->
+  <script>
+    const obs = new IntersectionObserver((entries) => {
+      entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('vis'); obs.unobserve(e.target) } })
+    }, { threshold: 0.12, rootMargin: '0px 0px -40px 0px' });
+    document.querySelectorAll('.rv').forEach(el => obs.observe(el));
+  </script>
+
+</body>
+</html>
