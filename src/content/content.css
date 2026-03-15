@@ -1,0 +1,194 @@
+#devlens-popup {
+  position: absolute;
+  z-index: 2147483647;
+  width: 400px;
+  max-height: 500px;
+  background: #1a1a2e;
+  border: 1px solid #2a2a4a;
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(99, 102, 241, 0.1);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #e0e0f0;
+  overflow: hidden;
+  animation: devlens-fadein 0.15s ease-out;
+}
+
+@keyframes devlens-fadein {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.devlens-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: #12122a;
+  border-bottom: 1px solid #2a2a4a;
+}
+
+.devlens-logo {
+  font-weight: 700;
+  font-size: 12px;
+  color: #818cf8;
+  letter-spacing: 0.02em;
+}
+
+.devlens-header-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.devlens-btn-icon {
+  background: none;
+  border: none;
+  color: #666;
+  cursor: pointer;
+  font-size: 12px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: all 0.15s;
+}
+
+.devlens-btn-icon:hover {
+  background: #2a2a4a;
+  color: #e0e0f0;
+}
+
+.devlens-body {
+  padding: 12px;
+  overflow-y: auto;
+  max-height: 430px;
+}
+
+.devlens-body p {
+  margin: 0 0 8px;
+}
+
+.devlens-body strong {
+  color: #a5b4fc;
+  display: block;
+  margin-top: 10px;
+  margin-bottom: 4px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.devlens-body strong:first-child {
+  margin-top: 0;
+}
+
+pre.devlens-code {
+  background: #0d0d1a !important;
+  border: 1px solid #2a2a4a;
+  border-radius: 8px;
+  padding: 10px 12px;
+  overflow-x: auto;
+  margin: 8px 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+pre.devlens-code code {
+  font-family: 'Fira Code', 'JetBrains Mono', 'SF Mono', 'Cascadia Code', Consolas, monospace !important;
+  color: #c9d1d9 !important;
+  background: none !important;
+  padding: 0 !important;
+  font-size: 12px !important;
+}
+
+code.devlens-inline-code {
+  background: #2a2a4a;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-family: 'Fira Code', Consolas, monospace;
+  font-size: 12px;
+  color: #c9d1d9;
+}
+
+.devlens-watchout {
+  background: rgba(245, 158, 11, 0.1);
+  border-left: 3px solid #f59e0b;
+  padding: 6px 10px;
+  border-radius: 0 6px 6px 0;
+  margin-top: 8px;
+  font-size: 12px;
+  color: #fbbf24;
+}
+
+.devlens-error {
+  color: #f87171;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: 6px;
+  padding: 10px;
+  font-size: 12px;
+}
+
+.devlens-loading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  color: #888;
+  font-size: 13px;
+}
+
+.devlens-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid #2a2a4a;
+  border-top-color: #818cf8;
+  border-radius: 50%;
+  animation: devlens-spin 0.6s linear infinite;
+}
+
+@keyframes devlens-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Code block toolbar */
+.devlens-code-toolbar {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: flex;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 0.2s;
+  z-index: 10;
+}
+
+pre:hover .devlens-code-toolbar,
+.devlens-code-toolbar:hover {
+  opacity: 1;
+}
+
+.devlens-code-btn {
+  background: rgba(26, 26, 46, 0.9);
+  border: 1px solid #2a2a4a;
+  border-radius: 6px;
+  padding: 3px 7px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+  color: #888;
+  backdrop-filter: blur(4px);
+}
+
+.devlens-code-btn:hover {
+  background: #2a2a4a;
+  border-color: #818cf8;
+  color: #e0e0f0;
+}
+
+/* Responsive */
+@media (max-width: 500px) {
+  #devlens-popup {
+    width: calc(100vw - 20px);
+    left: 10px !important;
+  }
+}
